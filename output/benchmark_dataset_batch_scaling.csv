@@ -1,0 +1,9 @@
+Algorithm,BatchSize,ImageResolution,ExecutionMode,TotalTimeMs,AvgTimePerImageMs,ThroughputImagesPerSec,ThroughputMPPerSec,Speedup,ParallelEfficiencyPct
+SLIC Superpixels (k=120, m=15),5,512x512,Sequential (1T),333,66.60,15.02,3.94,1.00,100.0%
+SLIC Superpixels (k=120, m=15),5,512x512,Parallel (12T),98,19.60,51.02,13.37,3.40,28.3%
+SLIC Superpixels (k=120, m=15),10,512x512,Sequential (1T),936,93.60,10.68,2.80,1.00,100.0%
+SLIC Superpixels (k=120, m=15),10,512x512,Parallel (12T),130,13.00,76.92,20.16,7.20,60.0%
+SLIC Superpixels (k=120, m=15),25,512x512,Sequential (1T),1636,65.44,15.28,4.01,1.00,100.0%
+SLIC Superpixels (k=120, m=15),25,512x512,Parallel (12T),304,12.16,82.24,21.56,5.38,44.8%
+SLIC Superpixels (k=120, m=15),50,512x512,Sequential (1T),3863,77.26,12.94,3.39,1.00,100.0%
+SLIC Superpixels (k=120, m=15),50,512x512,Parallel (12T),514,10.28,97.28,25.50,7.52,62.6%
