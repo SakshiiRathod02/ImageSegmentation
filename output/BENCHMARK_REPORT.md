@@ -14,26 +14,26 @@ In this experiment, image dimensions are scaled progressively while tracking exe
 
 | Algorithm | Resolution | Total Pixels | Time (ms) | Throughput (MP/s) | Memory (MB) |
 |:---|:---:|:---:|:---:|:---:|:---:|
-| Multi-Level Otsu (classes=3) | 256x256 | 65,536 px (0.07 MP) | 23 ms | **2.85 MP/s** | 0.8 MB |
-| K-Means (k=8) | 256x256 | 65,536 px (0.07 MP) | 50 ms | **1.31 MP/s** | 3.3 MB |
-| SLIC Superpixels (k=150, m=15) | 256x256 | 65,536 px (0.07 MP) | 34 ms | **1.93 MP/s** | 3.3 MB |
-| Felzenszwalb Graph (k=300, minSize=50) | 256x256 | 65,536 px (0.07 MP) | 246 ms | **0.27 MP/s** | 11.4 MB |
-| Multi-Level Otsu (classes=3) | 512x512 | 262,144 px (0.26 MP) | 11 ms | **23.83 MP/s** | 4.1 MB |
-| K-Means (k=8) | 512x512 | 262,144 px (0.26 MP) | 78 ms | **3.36 MP/s** | 25.4 MB |
-| SLIC Superpixels (k=150, m=15) | 512x512 | 262,144 px (0.26 MP) | 102 ms | **2.57 MP/s** | 26.1 MB |
-| Felzenszwalb Graph (k=300, minSize=50) | 512x512 | 262,144 px (0.26 MP) | 631 ms | **0.42 MP/s** | 53.5 MB |
-| Multi-Level Otsu (classes=3) | 1024x1024 | 1,048,576 px (1.05 MP) | 15 ms | **69.91 MP/s** | 12.2 MB |
-| K-Means (k=8) | 1024x1024 | 1,048,576 px (1.05 MP) | 245 ms | **4.28 MP/s** | 62.5 MB |
-| SLIC Superpixels (k=150, m=15) | 1024x1024 | 1,048,576 px (1.05 MP) | 231 ms | **4.54 MP/s** | 24.4 MB |
-| Felzenszwalb Graph (k=300, minSize=50) | 1024x1024 | 1,048,576 px (1.05 MP) | 3,077 ms | **0.34 MP/s** | 163.8 MB |
-| Multi-Level Otsu (classes=3) | 2048x2048 | 4,194,304 px (4.19 MP) | 43 ms | **97.54 MP/s** | 36.4 MB |
-| K-Means (k=8) | 2048x2048 | 4,194,304 px (4.19 MP) | 1,215 ms | **3.45 MP/s** | 155.8 MB |
-| SLIC Superpixels (k=150, m=15) | 2048x2048 | 4,194,304 px (4.19 MP) | 1,158 ms | **3.62 MP/s** | 73.0 MB |
-| Felzenszwalb Graph (k=300, minSize=50) | 2048x2048 | 4,194,304 px (4.19 MP) | 15,953 ms | **0.26 MP/s** | 700.5 MB |
-| Multi-Level Otsu (classes=3) | 3072x3072 | 9,437,184 px (9.44 MP) | 80 ms | **117.96 MP/s** | 76.3 MB |
-| K-Means (k=8) | 3072x3072 | 9,437,184 px (9.44 MP) | 2,400 ms | **3.93 MP/s** | 447.8 MB |
-| SLIC Superpixels (k=150, m=15) | 3072x3072 | 9,437,184 px (9.44 MP) | 2,334 ms | **4.04 MP/s** | 152.7 MB |
-| Felzenszwalb Graph (k=300, minSize=50) | 3072x3072 | 9,437,184 px (9.44 MP) | 37,004 ms | **0.26 MP/s** | 1490.9 MB |
+| Multi-Level Otsu (classes=3) | 256x256 | 65,536 px (0.07 MP) | 10 ms | **6.55 MP/s** | 0.8 MB |
+| K-Means (k=8) | 256x256 | 65,536 px (0.07 MP) | 41 ms | **1.60 MP/s** | 3.3 MB |
+| SLIC Superpixels (k=150, m=15) | 256x256 | 65,536 px (0.07 MP) | 20 ms | **3.28 MP/s** | 3.1 MB |
+| Felzenszwalb Graph (k=300, minSize=50) | 256x256 | 65,536 px (0.07 MP) | 176 ms | **0.37 MP/s** | 11.4 MB |
+| Multi-Level Otsu (classes=3) | 512x512 | 262,144 px (0.26 MP) | 9 ms | **29.13 MP/s** | 6.1 MB |
+| K-Means (k=8) | 512x512 | 262,144 px (0.26 MP) | 69 ms | **3.80 MP/s** | 20.5 MB |
+| SLIC Superpixels (k=150, m=15) | 512x512 | 262,144 px (0.26 MP) | 127 ms | **2.06 MP/s** | 26.3 MB |
+| Felzenszwalb Graph (k=300, minSize=50) | 512x512 | 262,144 px (0.26 MP) | 519 ms | **0.51 MP/s** | 53.3 MB |
+| Multi-Level Otsu (classes=3) | 1024x1024 | 1,048,576 px (1.05 MP) | 15 ms | **69.91 MP/s** | 18.9 MB |
+| K-Means (k=8) | 1024x1024 | 1,048,576 px (1.05 MP) | 259 ms | **4.05 MP/s** | 49.6 MB |
+| SLIC Superpixels (k=150, m=15) | 1024x1024 | 1,048,576 px (1.05 MP) | 238 ms | **4.41 MP/s** | 70.3 MB |
+| Felzenszwalb Graph (k=300, minSize=50) | 1024x1024 | 1,048,576 px (1.05 MP) | 3,166 ms | **0.33 MP/s** | 160.0 MB |
+| Multi-Level Otsu (classes=3) | 2048x2048 | 4,194,304 px (4.19 MP) | 49 ms | **85.60 MP/s** | 36.1 MB |
+| K-Means (k=8) | 2048x2048 | 4,194,304 px (4.19 MP) | 1,007 ms | **4.17 MP/s** | 155.1 MB |
+| SLIC Superpixels (k=150, m=15) | 2048x2048 | 4,194,304 px (4.19 MP) | 867 ms | **4.84 MP/s** | 72.7 MB |
+| Felzenszwalb Graph (k=300, minSize=50) | 2048x2048 | 4,194,304 px (4.19 MP) | 26,251 ms | **0.16 MP/s** | 638.9 MB |
+| Multi-Level Otsu (classes=3) | 3072x3072 | 9,437,184 px (9.44 MP) | 224 ms | **42.13 MP/s** | 114.2 MB |
+| K-Means (k=8) | 3072x3072 | 9,437,184 px (9.44 MP) | 6,914 ms | **1.36 MP/s** | 346.0 MB |
+| SLIC Superpixels (k=150, m=15) | 3072x3072 | 9,437,184 px (9.44 MP) | 6,119 ms | **1.54 MP/s** | 486.4 MB |
+| Felzenszwalb Graph (k=300, minSize=50) | 3072x3072 | 9,437,184 px (9.44 MP) | 92,508 ms | **0.10 MP/s** | 1470.8 MB |
 
 ### Key Complexity Insights for Large Images:
 - **SLIC Superpixel Segmentation**: Demonstrates strictly **linear O(N)** scaling. Because search windows are bounded to a local 2S x 2S region around each seed center, execution time increases proportionally to pixel count N.
@@ -46,14 +46,14 @@ In this experiment, dataset batch sizes are scaled from small batches to large s
 
 | Algorithm | Batch Size | Execution Mode | Total Time (ms) | Avg Time/Img (ms) | Speedup Factor | Parallel Efficiency |
 |:---|:---:|:---:|:---:|:---:|:---:|:---:|
-| SLIC Superpixels (k=120, m=15) | 5 images | Sequential (1T) | 333 ms | 66.6 ms | **1.00x** | 100.0% |
-| SLIC Superpixels (k=120, m=15) | 5 images | Parallel (12T) | 98 ms | 19.6 ms | **3.40x** | 28.3% |
-| SLIC Superpixels (k=120, m=15) | 10 images | Sequential (1T) | 936 ms | 93.6 ms | **1.00x** | 100.0% |
-| SLIC Superpixels (k=120, m=15) | 10 images | Parallel (12T) | 130 ms | 13.0 ms | **7.20x** | 60.0% |
-| SLIC Superpixels (k=120, m=15) | 25 images | Sequential (1T) | 1,636 ms | 65.4 ms | **1.00x** | 100.0% |
-| SLIC Superpixels (k=120, m=15) | 25 images | Parallel (12T) | 304 ms | 12.2 ms | **5.38x** | 44.8% |
-| SLIC Superpixels (k=120, m=15) | 50 images | Sequential (1T) | 3,863 ms | 77.3 ms | **1.00x** | 100.0% |
-| SLIC Superpixels (k=120, m=15) | 50 images | Parallel (12T) | 514 ms | 10.3 ms | **7.52x** | 62.6% |
+| SLIC Superpixels (k=120, m=15) | 5 images | Sequential (1T) | 811 ms | 162.2 ms | **1.00x** | 100.0% |
+| SLIC Superpixels (k=120, m=15) | 5 images | Parallel (12T) | 331 ms | 66.2 ms | **2.45x** | 20.4% |
+| SLIC Superpixels (k=120, m=15) | 10 images | Sequential (1T) | 1,517 ms | 151.7 ms | **1.00x** | 100.0% |
+| SLIC Superpixels (k=120, m=15) | 10 images | Parallel (12T) | 789 ms | 78.9 ms | **1.92x** | 16.0% |
+| SLIC Superpixels (k=120, m=15) | 25 images | Sequential (1T) | 4,896 ms | 195.8 ms | **1.00x** | 100.0% |
+| SLIC Superpixels (k=120, m=15) | 25 images | Parallel (12T) | 1,586 ms | 63.4 ms | **3.09x** | 25.7% |
+| SLIC Superpixels (k=120, m=15) | 50 images | Sequential (1T) | 7,994 ms | 159.9 ms | **1.00x** | 100.0% |
+| SLIC Superpixels (k=120, m=15) | 50 images | Parallel (12T) | 3,718 ms | 74.4 ms | **2.15x** | 17.9% |
 
 ### Concurrency & Amdahl's Law Analysis:
 - Batch processing across multiple images exhibits near-ideal parallel speedup due to task independence (embarrassingly parallel problem).
