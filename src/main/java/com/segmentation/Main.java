@@ -1,6 +1,7 @@
 package com.segmentation;
 
 import com.segmentation.algorithm.*;
+import com.segmentation.benchmark.BenchmarkChartViewer;
 import com.segmentation.benchmark.BenchmarkRunner;
 import com.segmentation.dataset.ImageDatasetLoader;
 import com.segmentation.dataset.ImageDatasetLoader.ImageEntry;
@@ -21,6 +22,7 @@ import java.util.Scanner;
  * - Procedural synthetic dataset generation with ground-truth masks.
  * - Batch segmentation of custom datasets (e.g. Kaggle datasets).
  * - Single-image multi-algorithm comparative visual segmentation.
+ * - Graphical display of benchmark graphs and performance analytics dashboard.
  */
 public class Main {
 
@@ -51,6 +53,16 @@ public class Main {
                     outDir = new File(args[1]);
                 }
                 new BenchmarkRunner(outDir).runFullSuite();
+                BenchmarkChartViewer.showDashboard(outDir);
+                break;
+
+            case "--gui":
+            case "--dashboard":
+            case "-v":
+                if (args.length > 1) {
+                    outDir = new File(args[1]);
+                }
+                BenchmarkChartViewer.showDashboard(outDir);
                 break;
 
             case "--generate-dataset":
@@ -96,13 +108,14 @@ public class Main {
         System.out.println("================================================================================");
         System.out.println("                COMPUTATIONAL IMAGE SEGMENTATION PLATFORM                       ");
         System.out.println("================================================================================");
-        System.out.println("  1. Run Full Performance Benchmark & Scaling Investigation (Recommended)");
-        System.out.println("  2. Generate Synthetic Dataset with Ground-Truth Masks");
-        System.out.println("  3. Process Custom / Kaggle Image Dataset Folder");
-        System.out.println("  4. Segment a Single Image with Visual Comparison Overlays");
-        System.out.println("  5. Exit");
+        System.out.println("  1. Run Full Performance Benchmark & Display Analytics Graphs (Recommended)");
+        System.out.println("  2. Display Performance Graphs & GUI Analytics Dashboard");
+        System.out.println("  3. Generate Synthetic Dataset with Ground-Truth Masks");
+        System.out.println("  4. Process Custom / Kaggle Image Dataset Folder");
+        System.out.println("  5. Segment a Single Image with Visual Comparison Overlays");
+        System.out.println("  6. Exit");
         System.out.println("================================================================================");
-        System.out.print("Please enter option [1-5] (default 1): ");
+        System.out.print("Please enter option [1-6] (default 1): ");
 
         Scanner scanner = new Scanner(System.in);
         String input = scanner.hasNextLine() ? scanner.nextLine().trim() : "1";
@@ -113,31 +126,36 @@ public class Main {
         switch (input) {
             case "1":
                 new BenchmarkRunner(outDir).runFullSuite();
+                BenchmarkChartViewer.showDashboard(outDir);
                 break;
             case "2":
+                BenchmarkChartViewer.showDashboard(outDir);
+                break;
+            case "3":
                 File synDir = new File(outDir, "synthetic_dataset");
                 System.out.println("Generating 25 synthetic benchmark images (512x512)...");
                 SyntheticDatasetGenerator.generateDatasetBatch(synDir, 25, 512, 512, 6.0);
                 System.out.println("Done! Saved to: " + synDir.getAbsolutePath());
                 break;
-            case "3":
+            case "4":
                 System.out.print("Enter path to image folder: ");
                 String path = scanner.nextLine().trim();
                 File inFolder = new File(path);
                 processCustomDataset(inFolder, new File(outDir, "batch_results"));
                 break;
-            case "4":
+            case "5":
                 System.out.print("Enter path to image file: ");
                 String fileStr = scanner.nextLine().trim();
                 File inFile = new File(fileStr);
                 segmentSingleImage(inFile, new File(outDir, "single_image_results"));
                 break;
-            case "5":
+            case "6":
                 System.out.println("Exiting.");
                 break;
             default:
                 System.out.println("Unknown option. Running full benchmark suite by default.");
                 new BenchmarkRunner(outDir).runFullSuite();
+                BenchmarkChartViewer.showDashboard(outDir);
                 break;
         }
     }
