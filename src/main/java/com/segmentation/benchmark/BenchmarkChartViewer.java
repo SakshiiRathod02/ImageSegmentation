@@ -1,21 +1,31 @@
 package com.segmentation.benchmark;
 
 import com.segmentation.util.ImageUtils;
+import com.segmentation.util.ThreadConfig;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.geom.Ellipse2D;
-import java.awt.geom.Line2D;
-import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
- * Interactive Swing GUI Dashboard that visually plots and displays the performance benchmark
- * graphs, multithreaded speedup curves, resolution scaling lines, and segmented image outputs.
+ * Swing dashboard that plots values from the benchmark CSV files.
  */
 public class BenchmarkChartViewer extends JFrame {
+
+    private static final Color[] SERIES_COLORS = {
+            new Color(43, 108, 176), new Color(217, 119, 6),
+            new Color(49, 151, 149), new Color(180, 50, 60),
+            new Color(120, 80, 170)
+    };
 
     public BenchmarkChartViewer(File outputDir) {
         super("Image Segmentation: Scalability & Performance Analytics Dashboard");
@@ -23,461 +33,403 @@ public class BenchmarkChartViewer extends JFrame {
         setSize(1050, 750);
         setLocationRelativeTo(null);
 
-        JTabbedPane tabbedPane = new JTabbedPane();
-        tabbedPane.setFont(new Font("SansSerif", Font.BOLD, 13));
+        JTabbedPane tabs = new JTabbedPane();
+        tabs.setFont(new Font("SansSerif", Font.BOLD, 13));
+        tabs.addTab("Thread Scaling", buildThreadScalingPanel(outputDir));
+        tabs.addTab("Batch Latency", buildBatchLatencyPanel(outputDir));
+        tabs.addTab("Resolution Scaling", buildResolutionPanel(outputDir));
+        tabs.addTab("Visual Segmentation Gallery", new VisualGalleryPanel(outputDir));
+        add(tabs, BorderLayout.CENTER);
 
-        // Tab 1: Thread Speedup & Amdahl's Law Curve
-        tabbedPane.addTab("Thread Speedup (Amdahl's Law)", new ThreadSpeedupPanel());
-
-        // Tab 2: Sequential vs Parallel Latency Bar Chart
-        tabbedPane.addTab("Batch Latency (1T vs 12T)", new BatchLatencyPanel());
-
-        // Tab 3: Large Image Resolution Scaling Curve
-        tabbedPane.addTab("Large Image Scaling (MP vs Time)", new ResolutionScalingPanel());
-
-        // Tab 4: Visual Segmentation Gallery
-        tabbedPane.addTab("Visual Segmentation Gallery", new VisualGalleryPanel(outputDir));
-
-        add(tabbedPane, BorderLayout.CENTER);
-
-        // Bottom status banner
         JPanel statusPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 8));
         statusPanel.setBackground(new Color(24, 28, 36));
-        JLabel statusLabel = new JLabel("Host: 12 CPU Logical Cores | Java: " + System.getProperty("java.version") +
-                " | Pure Java Graphics2D Rendering");
-        statusLabel.setForeground(new Color(200, 210, 230));
-        statusLabel.setFont(new Font("SansSerif", Font.PLAIN, 12));
-        statusPanel.add(statusLabel);
+        JLabel status = new JLabel(String.format(
+                "Available logical processors: %d | Configured workers: %d | Java: %s | Charts read measured CSV data",
+                ThreadConfig.getAvailableProcessors(), ThreadConfig.getThreadCount(),
+                System.getProperty("java.version")));
+        status.setForeground(new Color(200, 210, 230));
+        status.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        statusPanel.add(status);
         add(statusPanel, BorderLayout.SOUTH);
     }
 
-    /**
-     * Safely displays the interactive dashboard on the Event Dispatch Thread (EDT)
-     * if GUI display is supported by the OS environment.
-     */
     public static void showDashboard(File outputDir) {
         if (GraphicsEnvironment.isHeadless()) {
             System.out.println("[GUI Dashboard] Headless environment detected; skipping window display.");
             return;
         }
-
         SwingUtilities.invokeLater(() -> {
             try {
                 UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-            } catch (Exception ignored) {}
-
+            } catch (Exception e) {
+                System.err.println("[GUI Dashboard] Could not set system look and feel: " + e.getMessage());
+            }
             BenchmarkChartViewer viewer = new BenchmarkChartViewer(outputDir);
             viewer.setVisible(true);
             viewer.toFront();
-            System.out.println("\n[GUI Dashboard] Analytics Dashboard opened on screen!");
         });
     }
 
-    // =========================================================================
-    // PANEL 1: THREAD SPEEDUP & AMDAHL'S LAW PLOT
-    // =========================================================================
-    private static class ThreadSpeedupPanel extends JPanel {
-        @Override
-        protected void paintComponent(Graphics g) {
-            super.paintComponent(g);
-            Graphics2D g2 = (Graphics2D) g;
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-
-            int w = getWidth();
-            int h = getHeight();
-
-            // Background
-            g2.setColor(new Color(250, 252, 255));
-            g2.fillRect(0, 0, w, h);
-
-            int padLeft = 80;
-            int padRight = 80;
-            int padTop = 70;
-            int padBottom = 70;
-
-            int plotW = w - padLeft - padRight;
-            int plotH = h - padTop - padBottom;
-
-            // Title
-            g2.setColor(new Color(26, 54, 93));
-            g2.setFont(new Font("SansSerif", Font.BOLD, 17));
-            g2.drawString("Investigation 2: Parallel Speedup & Thread Efficiency vs. Dataset Size", padLeft, 38);
-            g2.setFont(new Font("SansSerif", Font.PLAIN, 12));
-            g2.setColor(new Color(80, 95, 120));
-            g2.drawString("SLIC Superpixels (512x512 images) across batches on 12 CPU Logical Cores (ForkJoinPool)", padLeft, 56);
-
-            // Data
-            int[] batches = {5, 10, 25, 50};
-            double[] speedup = {4.21, 6.07, 6.80, 6.40};
-            double[] efficiency = {35.0, 50.5, 56.6, 53.4};
-
-            double maxSpeedup = 8.0;
-
-            // Draw Grid & Y-Axis (Speedup)
-            g2.setFont(new Font("SansSerif", Font.PLAIN, 11));
-            for (int s = 0; s <= 8; s += 2) {
-                int y = padTop + plotH - (int) ((s / maxSpeedup) * plotH);
-                g2.setColor(new Color(225, 230, 240));
-                g2.drawLine(padLeft, y, padLeft + plotW, y);
-                g2.setColor(new Color(60, 75, 100));
-                g2.drawString(s + ".0x", padLeft - 45, y + 4);
-
-                // Right Y-Axis (Efficiency %)
-                int effVal = (int) ((s / maxSpeedup) * 100);
-                g2.setColor(new Color(180, 100, 20));
-                g2.drawString(effVal + "%", padLeft + plotW + 12, y + 4);
+    private static JPanel buildThreadScalingPanel(File outputDir) {
+        File csv = new File(outputDir, "benchmark_thread_scaling.csv");
+        List<Series> series = new ArrayList<>();
+        String message = null;
+        try {
+            List<String[]> rows = readCsv(csv);
+            List<Point> speedups = new ArrayList<>();
+            List<Point> efficiencies = new ArrayList<>();
+            for (String[] row : rows) {
+                if (row.length < 12 || !row[11].isEmpty()) {
+                    continue;
+                }
+                double threads = number(row, 3);
+                double speedup = number(row, 7);
+                double efficiency = number(row, 8);
+                if (Double.isFinite(threads) && Double.isFinite(speedup) && Double.isFinite(efficiency)
+                        && threads > 0 && speedup > 0) {
+                    speedups.add(new Point(threads, speedup));
+                    efficiencies.add(new Point(threads, efficiency));
+                }
             }
-
-            // Baseline Line (1.0x)
-            int yBase = padTop + plotH - (int) ((1.0 / maxSpeedup) * plotH);
-            g2.setColor(new Color(160, 170, 185));
-            Stroke dashed = new BasicStroke(1.5f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0, new float[]{6}, 0);
-            Stroke solid = new BasicStroke(2.8f);
-            g2.setStroke(dashed);
-            g2.drawLine(padLeft, yBase, padLeft + plotW, yBase);
-            g2.drawString("Baseline (1 Thread = 1.0x)", padLeft + 15, yBase - 6);
-
-            // Plot Speedup Curve (Navy Blue)
-            g2.setStroke(solid);
-            g2.setColor(new Color(30, 75, 140));
-
-            int[] px = new int[batches.length];
-            int[] py = new int[batches.length];
-            for (int i = 0; i < batches.length; i++) {
-                px[i] = padLeft + (int) (((double) i / (batches.length - 1)) * plotW);
-                py[i] = padTop + plotH - (int) ((speedup[i] / maxSpeedup) * plotH);
+            speedups.sort(Comparator.comparingDouble(point -> point.x));
+            efficiencies.sort(Comparator.comparingDouble(point -> point.x));
+            if (!speedups.isEmpty()) {
+                series.add(new Series("Speedup (x)", speedups, SERIES_COLORS[0], false));
+                series.add(new Series("Parallel efficiency (%)", efficiencies, SERIES_COLORS[1], true));
+            } else {
+                message = "No successful thread-scaling measurements found. Run the thread-scaling benchmark first.";
             }
+        } catch (IOException | NumberFormatException e) {
+            message = "Could not read measured thread-scaling CSV: " + e.getMessage();
+        }
+        return new ChartPanel("Measured Thread Scaling",
+                "Each point comes from benchmark_thread_scaling.csv; efficiency uses the right-hand axis.",
+                "Configured worker threads", "Speedup", "Efficiency (%)",
+                series, message, true);
+    }
 
-            for (int i = 0; i < batches.length - 1; i++) {
-                g2.drawLine(px[i], py[i], px[i + 1], py[i + 1]);
+    private static JPanel buildBatchLatencyPanel(File outputDir) {
+        File csv = new File(outputDir, "benchmark_dataset_batch_scaling.csv");
+        List<Series> series = new ArrayList<>();
+        String message = null;
+        try {
+            Map<String, List<Point>> grouped = new LinkedHashMap<>();
+            for (String[] row : readCsv(csv)) {
+                int resolutionIndex = findResolutionIndex(row);
+                int batchIndex = resolutionIndex - 1;
+                int modeIndex = resolutionIndex + 1;
+                int timeIndex = resolutionIndex + 2;
+                if (resolutionIndex < 1 || batchIndex < 0 || timeIndex >= row.length) {
+                    continue;
+                }
+                String mode = row[modeIndex];
+                if (!mode.startsWith("Sequential") && !mode.startsWith("Parallel")) {
+                    continue;
+                }
+                String key = mode.startsWith("Sequential") ? "Sequential" : mode;
+                grouped.computeIfAbsent(key, ignored -> new ArrayList<>())
+                        .add(new Point(number(row, batchIndex), number(row, timeIndex)));
             }
-
-            // Draw Points and Annotations
-            for (int i = 0; i < batches.length; i++) {
-                g2.setColor(new Color(30, 75, 140));
-                g2.fill(new Ellipse2D.Double(px[i] - 6, py[i] - 6, 12, 12));
-                g2.setColor(Color.WHITE);
-                g2.fill(new Ellipse2D.Double(px[i] - 3, py[i] - 3, 6, 6));
-
-                g2.setColor(new Color(20, 50, 100));
-                g2.setFont(new Font("SansSerif", Font.BOLD, 12));
-                g2.drawString(String.format("%.2fx", speedup[i]), px[i] - 16, py[i] - 12);
-
-                // X-Axis labels
-                g2.setFont(new Font("SansSerif", Font.BOLD, 11));
-                g2.setColor(new Color(50, 60, 80));
-                g2.drawString(batches[i] + " Images", px[i] - 25, padTop + plotH + 25);
+            int colorIndex = 0;
+            for (Map.Entry<String, List<Point>> entry : grouped.entrySet()) {
+                entry.getValue().sort(Comparator.comparingDouble(point -> point.x));
+                series.add(new Series(entry.getKey(), entry.getValue(),
+                        SERIES_COLORS[colorIndex++ % SERIES_COLORS.length], false));
             }
-
-            // Plot Parallel Efficiency Curve (Orange dashed)
-            g2.setStroke(new BasicStroke(2.0f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0, new float[]{5, 4}, 0));
-            g2.setColor(new Color(217, 119, 6));
-
-            int[] pyEff = new int[batches.length];
-            for (int i = 0; i < batches.length; i++) {
-                pyEff[i] = padTop + plotH - (int) ((efficiency[i] / 100.0) * plotH);
+            if (series.isEmpty()) {
+                message = "No batch measurements found. Run the benchmark first.";
             }
-            for (int i = 0; i < batches.length - 1; i++) {
-                g2.drawLine(px[i], pyEff[i], px[i + 1], pyEff[i + 1]);
+        } catch (IOException | NumberFormatException e) {
+            message = "Could not read measured batch CSV: " + e.getMessage();
+        }
+        return new ChartPanel("Measured Batch Processing Time",
+                "Total wall-clock time from benchmark_dataset_batch_scaling.csv.",
+                "Images in batch", "Total time (ms)", null, series, message, false);
+    }
+
+    private static JPanel buildResolutionPanel(File outputDir) {
+        File csv = new File(outputDir, "benchmark_resolution_scaling.csv");
+        List<Series> series = new ArrayList<>();
+        String message = null;
+        try {
+            Map<String, List<Point>> grouped = new LinkedHashMap<>();
+            for (String[] row : readCsv(csv)) {
+                int resolutionIndex = findResolutionIndex(row);
+                if (resolutionIndex < 0 || resolutionIndex + 3 >= row.length) {
+                    continue;
+                }
+                String algorithm = String.join(",", java.util.Arrays.copyOfRange(row, 0, resolutionIndex));
+                grouped.computeIfAbsent(algorithm, ignored -> new ArrayList<>())
+                        .add(new Point(number(row, resolutionIndex + 2), number(row, resolutionIndex + 3)));
             }
-            for (int i = 0; i < batches.length; i++) {
-                g2.fillRect(px[i] - 4, pyEff[i] - 4, 8, 8);
-                g2.setFont(new Font("SansSerif", Font.BOLD, 11));
-                g2.drawString(String.format("%.1f%%", efficiency[i]), px[i] - 16, pyEff[i] + 18);
+            int colorIndex = 0;
+            for (Map.Entry<String, List<Point>> entry : grouped.entrySet()) {
+                entry.getValue().sort(Comparator.comparingDouble(point -> point.x));
+                series.add(new Series(entry.getKey(), entry.getValue(),
+                        SERIES_COLORS[colorIndex++ % SERIES_COLORS.length], false));
             }
+            if (series.isEmpty()) {
+                message = "No resolution measurements found. Run the benchmark first.";
+            }
+        } catch (IOException | NumberFormatException e) {
+            message = "Could not read measured resolution CSV: " + e.getMessage();
+        }
+        return new ChartPanel("Measured Resolution Scaling",
+                "Execution times are read from benchmark_resolution_scaling.csv.",
+                "Image size (megapixels)", "Execution time (ms)", null,
+                series, message, false);
+    }
 
-            // Legend
-            int legX = padLeft + 20;
-            int legY = padTop + 20;
-            g2.setColor(new Color(240, 245, 255));
-            g2.fillRect(legX, legY, 260, 50);
-            g2.setColor(new Color(180, 200, 230));
-            g2.drawRect(legX, legY, 260, 50);
+    private static double number(String[] row, int index) {
+        return Double.parseDouble(row[index].replace("%", "").trim());
+    }
 
-            g2.setColor(new Color(30, 75, 140));
-            g2.fillRect(legX + 12, legY + 12, 16, 5);
-            g2.drawString("Speedup Factor (S = Tseq / Tpar)", legX + 36, legY + 18);
+    private static int findResolutionIndex(String[] row) {
+        for (int i = 0; i < row.length; i++) {
+            if (row[i].matches("\\d+x\\d+")) {
+                return i;
+            }
+        }
+        return -1;
+    }
 
-            g2.setColor(new Color(217, 119, 6));
-            g2.fillRect(legX + 12, legY + 32, 16, 5);
-            g2.drawString("Parallel Efficiency (E = S / 12 Cores)", legX + 36, legY + 38);
+    private static List<String[]> readCsv(File file) throws IOException {
+        List<String[]> rows = new ArrayList<>();
+        if (!file.isFile()) {
+            throw new IOException("File does not exist: " + file.getAbsolutePath());
+        }
+        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+            String line;
+            boolean header = true;
+            while ((line = reader.readLine()) != null) {
+                if (header) {
+                    header = false;
+                    continue;
+                }
+                if (!line.trim().isEmpty()) {
+                    rows.add(parseCsvLine(line));
+                }
+            }
+        }
+        return rows;
+    }
+
+    private static String[] parseCsvLine(String line) {
+        List<String> fields = new ArrayList<>();
+        StringBuilder field = new StringBuilder();
+        boolean quoted = false;
+        for (int i = 0; i < line.length(); i++) {
+            char ch = line.charAt(i);
+            if (ch == '"') {
+                if (quoted && i + 1 < line.length() && line.charAt(i + 1) == '"') {
+                    field.append('"');
+                    i++;
+                } else {
+                    quoted = !quoted;
+                }
+            } else if (ch == ',' && !quoted) {
+                fields.add(field.toString());
+                field.setLength(0);
+            } else {
+                field.append(ch);
+            }
+        }
+        fields.add(field.toString());
+        return fields.toArray(new String[0]);
+    }
+
+    private static final class Point {
+        final double x;
+        final double y;
+
+        Point(double x, double y) {
+            this.x = x;
+            this.y = y;
         }
     }
 
-    // =========================================================================
-    // PANEL 2: BATCH LATENCY (1T vs 12T) BAR CHART
-    // =========================================================================
-    private static class BatchLatencyPanel extends JPanel {
-        @Override
-        protected void paintComponent(Graphics g) {
-            super.paintComponent(g);
-            Graphics2D g2 = (Graphics2D) g;
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+    private static final class Series {
+        final String name;
+        final List<Point> points;
+        final Color color;
+        final boolean rightAxis;
 
-            int w = getWidth();
-            int h = getHeight();
-
-            g2.setColor(new Color(250, 252, 255));
-            g2.fillRect(0, 0, w, h);
-
-            int padLeft = 90;
-            int padRight = 60;
-            int padTop = 70;
-            int padBottom = 70;
-
-            int plotW = w - padLeft - padRight;
-            int plotH = h - padTop - padBottom;
-
-            // Title
-            g2.setColor(new Color(26, 54, 93));
-            g2.setFont(new Font("SansSerif", Font.BOLD, 17));
-            g2.drawString("Batch Processing Wall-Clock Latency: Sequential vs. Multi-Threaded", padLeft, 38);
-            g2.setFont(new Font("SansSerif", Font.PLAIN, 12));
-            g2.setColor(new Color(80, 95, 120));
-            g2.drawString("Demonstrates latency reduction from 5.5s down to 863 ms (17.3 ms/img) using 12 parallel threads", padLeft, 56);
-
-            String[] categories = {"5 Images", "10 Images", "25 Images", "50 Images"};
-            int[] seqMs = {593, 1304, 3058, 5527};
-            int[] parMs = {141, 215, 450, 863};
-            double maxTime = 6000.0;
-
-            // Y-Axis
-            g2.setFont(new Font("SansSerif", Font.PLAIN, 11));
-            for (int t = 0; t <= 6000; t += 1000) {
-                int y = padTop + plotH - (int) ((t / maxTime) * plotH);
-                g2.setColor(new Color(225, 230, 240));
-                g2.drawLine(padLeft, y, padLeft + plotW, y);
-                g2.setColor(new Color(60, 75, 100));
-                g2.drawString(t + " ms", padLeft - 60, y + 4);
-            }
-
-            int groupW = plotW / categories.length;
-            int barW = Math.min(45, groupW / 3);
-
-            for (int i = 0; i < categories.length; i++) {
-                int groupCenter = padLeft + i * groupW + groupW / 2;
-
-                int hSeq = (int) ((seqMs[i] / maxTime) * plotH);
-                int hPar = (int) ((parMs[i] / maxTime) * plotH);
-
-                int xSeq = groupCenter - barW - 4;
-                int ySeq = padTop + plotH - hSeq;
-
-                int xPar = groupCenter + 4;
-                int yPar = padTop + plotH - hPar;
-
-                // Sequential Bar (Red)
-                g2.setColor(new Color(229, 62, 62));
-                g2.fillRoundRect(xSeq, ySeq, barW, hSeq, 4, 4);
-
-                // Parallel Bar (Blue)
-                g2.setColor(new Color(43, 108, 176));
-                g2.fillRoundRect(xPar, yPar, barW, hPar, 4, 4);
-
-                // Labels above bars
-                g2.setFont(new Font("SansSerif", Font.BOLD, 10));
-                g2.setColor(new Color(180, 40, 40));
-                g2.drawString(seqMs[i] + " ms", xSeq - 4, ySeq - 6);
-
-                g2.setColor(new Color(20, 70, 140));
-                g2.drawString(parMs[i] + " ms", xPar - 4, yPar - 6);
-
-                // X label
-                g2.setFont(new Font("SansSerif", Font.BOLD, 12));
-                g2.setColor(new Color(40, 50, 70));
-                g2.drawString(categories[i], groupCenter - 25, padTop + plotH + 25);
-            }
-
-            // Legend
-            int legX = padLeft + 20;
-            int legY = padTop + 20;
-            g2.setColor(new Color(240, 245, 255));
-            g2.fillRect(legX, legY, 280, 55);
-            g2.setColor(new Color(180, 200, 230));
-            g2.drawRect(legX, legY, 280, 55);
-
-            g2.setColor(new Color(229, 62, 62));
-            g2.fillRect(legX + 12, legY + 14, 16, 12);
-            g2.setColor(new Color(40, 50, 70));
-            g2.drawString("Sequential (1 Core Baseline)", legX + 36, legY + 24);
-
-            g2.setColor(new Color(43, 108, 176));
-            g2.fillRect(legX + 12, legY + 34, 16, 12);
-            g2.drawString("Parallel (12 Cores ForkJoinPool)", legX + 36, legY + 44);
+        Series(String name, List<Point> points, Color color, boolean rightAxis) {
+            this.name = name;
+            this.points = points;
+            this.color = color;
+            this.rightAxis = rightAxis;
         }
     }
 
-    // =========================================================================
-    // PANEL 3: LARGE IMAGE RESOLUTION SCALING
-    // =========================================================================
-    private static class ResolutionScalingPanel extends JPanel {
+    private static final class ChartPanel extends JPanel {
+        private final String title;
+        private final String subtitle;
+        private final String xLabel;
+        private final String yLabel;
+        private final String rightLabel;
+        private final List<Series> series;
+        private final String message;
+        private final boolean percentRightAxis;
+
+        ChartPanel(String title, String subtitle, String xLabel, String yLabel,
+                   String rightLabel, List<Series> series, String message,
+                   boolean percentRightAxis) {
+            this.title = title;
+            this.subtitle = subtitle;
+            this.xLabel = xLabel;
+            this.yLabel = yLabel;
+            this.rightLabel = rightLabel;
+            this.series = series;
+            this.message = message;
+            this.percentRightAxis = percentRightAxis;
+            setBackground(new Color(250, 252, 255));
+        }
+
         @Override
-        protected void paintComponent(Graphics g) {
-            super.paintComponent(g);
-            Graphics2D g2 = (Graphics2D) g;
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        protected void paintComponent(Graphics graphics) {
+            super.paintComponent(graphics);
+            Graphics2D g = (Graphics2D) graphics.create();
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            int left = 85, right = rightLabel == null ? 45 : 75, top = 80, bottom = 75;
+            int plotWidth = Math.max(1, getWidth() - left - right);
+            int plotHeight = Math.max(1, getHeight() - top - bottom);
 
-            int w = getWidth();
-            int h = getHeight();
+            g.setColor(new Color(26, 54, 93));
+            g.setFont(new Font("SansSerif", Font.BOLD, 17));
+            g.drawString(title, left, 35);
+            g.setFont(new Font("SansSerif", Font.PLAIN, 12));
+            g.setColor(new Color(80, 95, 120));
+            g.drawString(subtitle, left, 55);
 
-            g2.setColor(new Color(250, 252, 255));
-            g2.fillRect(0, 0, w, h);
-
-            int padLeft = 85;
-            int padRight = 80;
-            int padTop = 70;
-            int padBottom = 70;
-
-            int plotW = w - padLeft - padRight;
-            int plotH = h - padTop - padBottom;
-
-            // Title
-            g2.setColor(new Color(26, 54, 93));
-            g2.setFont(new Font("SansSerif", Font.BOLD, 17));
-            g2.drawString("Investigation 1: Large Image Scaling (Execution Time vs Megapixels)", padLeft, 38);
-            g2.setFont(new Font("SansSerif", Font.PLAIN, 12));
-            g2.setColor(new Color(80, 95, 120));
-            g2.drawString("Contrasts SLIC's linear O(N) scaling (4.3s at 9.44 MP) against Felzenszwalb's O(E log E) sorting bottleneck (66.8s)", padLeft, 56);
-
-            String[] resLabels = {"256x256\n(0.07 MP)", "512x512\n(0.26 MP)", "1024x1024\n(1.05 MP)", "2048x2048\n(4.19 MP)", "3072x3072\n(9.44 MP)"};
-            double[] mpVals = {0.065, 0.262, 1.048, 4.194, 9.437};
-
-            int[] slicTime = {29, 126, 415, 2076, 4336};
-            int[] felzTime = {382, 1139, 5507, 27270, 66840};
-            int[] kmeansTime = {77, 181, 485, 2427, 4466};
-            int[] otsuTime = {24, 17, 28, 78, 185};
-
-            double maxTime = 70000.0;
-
-            // Grid
-            g2.setFont(new Font("SansSerif", Font.PLAIN, 11));
-            for (int t = 0; t <= 70000; t += 10000) {
-                int y = padTop + plotH - (int) ((t / maxTime) * plotH);
-                g2.setColor(new Color(225, 230, 240));
-                g2.drawLine(padLeft, y, padLeft + plotW, y);
-                g2.setColor(new Color(60, 75, 100));
-                g2.drawString((t / 1000) + " s", padLeft - 50, y + 4);
+            if (message != null || series.isEmpty()) {
+                g.setColor(new Color(90, 100, 115));
+                g.drawString(message == null ? "No measured data available." : message,
+                        left, top + 35);
+                g.dispose();
+                return;
             }
 
-            int n = mpVals.length;
-            int[] px = new int[n];
-            for (int i = 0; i < n; i++) {
-                px[i] = padLeft + (int) ((mpVals[i] / 9.5) * plotW);
+            double minX = Double.POSITIVE_INFINITY, maxX = Double.NEGATIVE_INFINITY;
+            double maxY = 0.0;
+            double maxRightY = 100.0;
+            for (Series s : series) {
+                for (Point point : s.points) {
+                    minX = Math.min(minX, point.x);
+                    maxX = Math.max(maxX, point.x);
+                    if (!s.rightAxis) {
+                        maxY = Math.max(maxY, point.y);
+                    } else {
+                        maxRightY = Math.max(maxRightY, point.y);
+                    }
+                }
+            }
+            if (maxX == minX) {
+                minX -= 0.5;
+                maxX += 0.5;
+            }
+            maxY = Math.max(1.0, Math.ceil(maxY / 5.0) * 5.0);
+            if (percentRightAxis) {
+                maxRightY = Math.ceil(maxRightY / 20.0) * 20.0;
             }
 
-            // Draw Felzenszwalb (Red)
-            g2.setColor(new Color(229, 62, 62));
-            g2.setStroke(new BasicStroke(2.8f));
-            for (int i = 0; i < n - 1; i++) {
-                int y1 = padTop + plotH - (int) ((felzTime[i] / maxTime) * plotH);
-                int y2 = padTop + plotH - (int) ((felzTime[i + 1] / maxTime) * plotH);
-                g2.drawLine(px[i], y1, px[i + 1], y2);
+            g.setFont(new Font("SansSerif", Font.PLAIN, 10));
+            for (int tick = 0; tick <= 5; tick++) {
+                int y = top + plotHeight - tick * plotHeight / 5;
+                g.setColor(new Color(225, 230, 240));
+                g.drawLine(left, y, left + plotWidth, y);
+                g.setColor(new Color(60, 75, 100));
+                g.drawString(String.format("%.1f", maxY * tick / 5.0), left - 48, y + 4);
+                if (percentRightAxis) {
+                    g.setColor(new Color(180, 100, 20));
+                    g.drawString(String.format("%.0f%%", maxRightY * tick / 5.0),
+                            left + plotWidth + 10, y + 4);
+                }
+            }
+            g.setColor(new Color(45, 55, 70));
+            g.drawString(yLabel, 12, top - 14);
+            if (rightLabel != null) {
+                g.setColor(new Color(180, 100, 20));
+                g.drawString(rightLabel, left + plotWidth - 100, top - 14);
+            }
+            g.setColor(new Color(45, 55, 70));
+            g.drawString(xLabel, left + plotWidth / 2 - 35, getHeight() - 18);
+
+            for (int tick = 0; tick <= 5; tick++) {
+                double value = minX + (maxX - minX) * tick / 5.0;
+                int x = left + tick * plotWidth / 5;
+                g.setColor(new Color(60, 75, 100));
+                g.drawString(String.format("%.2f", value), x - 15, top + plotHeight + 18);
             }
 
-            // Draw SLIC (Blue)
-            g2.setColor(new Color(43, 108, 176));
-            for (int i = 0; i < n - 1; i++) {
-                int y1 = padTop + plotH - (int) ((slicTime[i] / maxTime) * plotH);
-                int y2 = padTop + plotH - (int) ((slicTime[i + 1] / maxTime) * plotH);
-                g2.drawLine(px[i], y1, px[i + 1], y2);
+            int legendX = left + 10;
+            int legendY = top + 10;
+            for (Series s : series) {
+                if (s.points.isEmpty()) {
+                    continue;
+                }
+                g.setColor(s.color);
+                g.setStroke(new BasicStroke(2.5f));
+                Point previous = null;
+                for (Point point : s.points) {
+                    double yMax = s.rightAxis && percentRightAxis ? maxRightY : maxY;
+                    int x = left + (int) ((point.x - minX) / (maxX - minX) * plotWidth);
+                    int y = top + plotHeight - (int) (Math.min(yMax, point.y) / yMax * plotHeight);
+                    if (previous != null) {
+                        int prevX = left + (int) ((previous.x - minX) / (maxX - minX) * plotWidth);
+                        int prevY = top + plotHeight - (int) (Math.min(yMax, previous.y) / yMax * plotHeight);
+                        g.drawLine(prevX, prevY, x, y);
+                    }
+                    g.fillOval(x - 4, y - 4, 8, 8);
+                    previous = point;
+                }
+                g.setFont(new Font("SansSerif", Font.BOLD, 11));
+                g.drawLine(legendX, legendY + 4, legendX + 20, legendY + 4);
+                g.drawString(s.name, legendX + 26, legendY + 8);
+                legendY += 20;
             }
-
-            // Draw KMeans (Teal)
-            g2.setColor(new Color(49, 151, 149));
-            for (int i = 0; i < n - 1; i++) {
-                int y1 = padTop + plotH - (int) ((kmeansTime[i] / maxTime) * plotH);
-                int y2 = padTop + plotH - (int) ((kmeansTime[i + 1] / maxTime) * plotH);
-                g2.drawLine(px[i], y1, px[i + 1], y2);
-            }
-
-            // Annotations at 9.44 MP
-            int yFelzLast = padTop + plotH - (int) ((felzTime[n - 1] / maxTime) * plotH);
-            g2.setColor(new Color(229, 62, 62));
-            g2.drawString("Felzenszwalb: 66.8s (37.7M edges sorted)", px[n - 1] - 250, yFelzLast - 10);
-
-            int ySlicLast = padTop + plotH - (int) ((slicTime[n - 1] / maxTime) * plotH);
-            g2.setColor(new Color(43, 108, 176));
-            g2.drawString("SLIC: 4.3s (Linear O(N))", px[n - 1] - 150, ySlicLast - 10);
-
-            // X-Axis ticks
-            g2.setColor(new Color(40, 50, 70));
-            g2.setFont(new Font("SansSerif", Font.PLAIN, 10));
-            for (int i = 0; i < n; i++) {
-                g2.drawLine(px[i], padTop + plotH, px[i], padTop + plotH + 5);
-                g2.drawString(String.format("%.2f MP", mpVals[i]), px[i] - 15, padTop + plotH + 20);
-            }
-
-            // Legend
-            int legX = padLeft + 20;
-            int legY = padTop + 20;
-            g2.setColor(new Color(240, 245, 255));
-            g2.fillRect(legX, legY, 300, 75);
-            g2.setColor(new Color(180, 200, 230));
-            g2.drawRect(legX, legY, 300, 75);
-
-            g2.setColor(new Color(43, 108, 176));
-            g2.fillRect(legX + 12, legY + 12, 16, 5);
-            g2.drawString("SLIC Superpixels (O(N) Linear Time)", legX + 36, legY + 18);
-
-            g2.setColor(new Color(49, 151, 149));
-            g2.fillRect(legX + 12, legY + 32, 16, 5);
-            g2.drawString("K-Means (k=8, Parallel Lloyd)", legX + 36, legY + 38);
-
-            g2.setColor(new Color(229, 62, 62));
-            g2.fillRect(legX + 12, legY + 52, 16, 5);
-            g2.drawString("Felzenszwalb Graph (O(E log E) Sorting)", legX + 36, legY + 58);
+            g.dispose();
         }
     }
 
-    // =========================================================================
-    // PANEL 4: VISUAL SEGMENTATION GALLERY
-    // =========================================================================
-    private static class VisualGalleryPanel extends JPanel {
-        private final File outputDir;
-
-        public VisualGalleryPanel(File outputDir) {
-            this.outputDir = outputDir;
+    private static final class VisualGalleryPanel extends JPanel {
+        VisualGalleryPanel(File outputDir) {
             setLayout(new BorderLayout());
-
-            JPanel cardsPanel = new JPanel(new GridLayout(2, 2, 10, 10));
-            cardsPanel.setBackground(new Color(245, 248, 252));
-            cardsPanel.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
-
-            File visualsDir = new File(outputDir, "visuals");
-
+            JPanel cards = new JPanel(new GridLayout(2, 2, 10, 10));
+            cards.setBackground(new Color(245, 248, 252));
+            cards.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
+            File visuals = new File(outputDir, "visuals");
             String[][] items = {
-                    {"Felzenszwalb Graph (k=350, minSize=60)", "comparison_Felzenszwalb_Graph__k_350__minSize_60_.png"},
-                    {"SLIC Superpixels (k=120, m=15)", "comparison_SLIC_Superpixels__k_120__m_15_.png"},
-                    {"K-Means Clustering (k=8, Spatial XY)", "comparison_K-Means__k_8__spatial_true_.png"},
-                    {"Multi-Level Otsu (classes=3)", "comparison_Multi-Level_Otsu__classes_3_.png"}
+                    {"Felzenszwalb Graph", "comparison_Felzenszwalb_Graph__k_350__minSize_60_.png"},
+                    {"SLIC Superpixels", "comparison_SLIC_Superpixels__k_120__m_15_.png"},
+                    {"K-Means", "comparison_K-Means__k_8__spatial_true_.png"},
+                    {"Multi-Level Otsu", "comparison_Multi-Level_Otsu__classes_3_.png"}
             };
-
-            for (String[] it : items) {
+            for (String[] item : items) {
                 JPanel card = new JPanel(new BorderLayout(5, 5));
                 card.setBorder(BorderFactory.createLineBorder(new Color(210, 220, 235), 1));
                 card.setBackground(Color.WHITE);
-
-                JLabel title = new JLabel(it[0], SwingConstants.CENTER);
+                JLabel title = new JLabel(item[0], SwingConstants.CENTER);
                 title.setFont(new Font("SansSerif", Font.BOLD, 12));
-                title.setForeground(new Color(26, 54, 93));
                 card.add(title, BorderLayout.NORTH);
-
-                File imgFile = new File(visualsDir, it[1]);
-                if (imgFile.exists()) {
+                File imageFile = new File(visuals, item[1]);
+                if (imageFile.isFile()) {
                     try {
-                        BufferedImage img = ImageUtils.loadImage(imgFile);
-                        // Scale to fit card
-                        Image scaled = img.getScaledInstance(460, 230, Image.SCALE_SMOOTH);
-                        card.add(new JLabel(new ImageIcon(scaled)), BorderLayout.CENTER);
-                    } catch (Exception ignored) {}
+                        BufferedImage image = ImageUtils.loadImage(imageFile);
+                        card.add(new JLabel(new ImageIcon(image.getScaledInstance(460, 230, Image.SCALE_SMOOTH))),
+                                BorderLayout.CENTER);
+                    } catch (IOException e) {
+                        card.add(new JLabel("Could not load image: " + e.getMessage(), SwingConstants.CENTER),
+                                BorderLayout.CENTER);
+                    }
+                } else {
+                    card.add(new JLabel("Run the benchmark to generate this image.", SwingConstants.CENTER),
+                            BorderLayout.CENTER);
                 }
-                cardsPanel.add(card);
+                cards.add(card);
             }
-
-            add(new JScrollPane(cardsPanel), BorderLayout.CENTER);
+            add(new JScrollPane(cards), BorderLayout.CENTER);
         }
     }
 }

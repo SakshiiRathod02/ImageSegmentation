@@ -1,21 +1,21 @@
-Algorithm,Resolution,Pixels,MegaPixels,ExecutionTimeMs,ThroughputMPPerSec,MemoryMB,Segments
-Multi-Level Otsu (classes=3),256x256,65536,0.066,10,6.554,0.82,3
-K-Means (k=8),256x256,65536,0.066,41,1.598,3.27,8
-SLIC Superpixels (k=150, m=15),256x256,65536,0.066,20,3.277,3.08,144
-Felzenszwalb Graph (k=300, minSize=50),256x256,65536,0.066,176,0.372,11.41,23
-Multi-Level Otsu (classes=3),512x512,262144,0.262,9,29.127,6.07,3
-K-Means (k=8),512x512,262144,0.262,69,3.799,20.52,8
-SLIC Superpixels (k=150, m=15),512x512,262144,0.262,127,2.064,26.27,144
-Felzenszwalb Graph (k=300, minSize=50),512x512,262144,0.262,519,0.505,53.28,46
-Multi-Level Otsu (classes=3),1024x1024,1048576,1.049,15,69.905,18.89,3
-K-Means (k=8),1024x1024,1048576,1.049,259,4.049,49.56,8
-SLIC Superpixels (k=150, m=15),1024x1024,1048576,1.049,238,4.406,70.27,144
-Felzenszwalb Graph (k=300, minSize=50),1024x1024,1048576,1.049,3166,0.331,159.99,79
-Multi-Level Otsu (classes=3),2048x2048,4194304,4.194,49,85.598,36.08,3
-K-Means (k=8),2048x2048,4194304,4.194,1007,4.165,155.10,8
-SLIC Superpixels (k=150, m=15),2048x2048,4194304,4.194,867,4.838,72.67,143
-Felzenszwalb Graph (k=300, minSize=50),2048x2048,4194304,4.194,26251,0.160,638.95,149
-Multi-Level Otsu (classes=3),3072x3072,9437184,9.437,224,42.130,114.24,3
-K-Means (k=8),3072x3072,9437184,9.437,6914,1.365,346.00,8
-SLIC Superpixels (k=150, m=15),3072x3072,9437184,9.437,6119,1.542,486.43,143
-Felzenszwalb Graph (k=300, minSize=50),3072x3072,9437184,9.437,92508,0.102,1470.77,322
+Algorithm,Resolution,Pixels,MegaPixels,ExecutionTimeMs,ThroughputMPPerSec,MemoryMB,Segments,ConfiguredThreadCount,ActualPoolParallelism,Failure,TimingMethod,MeasurementRepeats
+"Multi-Level Otsu (classes=3)",256x256,65536,0.066,15,4.369,0.85,3,25000,1,"","single measured execution",1
+"K-Means (k=8)",256x256,65536,0.066,136,0.482,48.63,8,25000,25000,"","single measured execution",1
+"SLIC Superpixels (k=150, m=15)",256x256,65536,0.066,22,2.979,3.33,144,25000,1,"","single measured execution",1
+"Felzenszwalb Graph (k=300, minSize=50)",256x256,65536,0.066,348,0.188,9.69,23,25000,1,"","single measured execution",1
+"Multi-Level Otsu (classes=3)",512x512,262144,0.262,30,8.738,6.08,3,25000,1,"","single measured execution",1
+"K-Means (k=8)",512x512,262144,0.262,263,0.997,25.06,8,25000,25000,"","single measured execution",1
+"SLIC Superpixels (k=150, m=15)",512x512,262144,0.262,133,1.971,26.34,144,25000,1,"","single measured execution",1
+"Felzenszwalb Graph (k=300, minSize=50)",512x512,262144,0.262,829,0.316,53.52,46,25000,1,"","single measured execution",1
+"Multi-Level Otsu (classes=3)",1024x1024,1048576,1.049,23,45.590,18.18,3,25000,1,"","single measured execution",1
+"K-Means (k=8)",1024x1024,1048576,1.049,727,1.442,41.83,8,25000,25000,"","single measured execution",1
+"SLIC Superpixels (k=150, m=15)",1024x1024,1048576,1.049,348,3.013,70.08,144,25000,1,"","single measured execution",1
+"Felzenszwalb Graph (k=300, minSize=50)",1024x1024,1048576,1.049,4709,0.223,166.35,79,25000,1,"","single measured execution",1
+"Multi-Level Otsu (classes=3)",2048x2048,4194304,4.194,167,25.116,36.17,3,25000,1,"","single measured execution",1
+"K-Means (k=8)",2048x2048,4194304,4.194,15857,0.265,152.04,8,25000,25000,"","single measured execution",1
+"SLIC Superpixels (k=150, m=15)",2048x2048,4194304,4.194,2752,1.524,72.61,143,25000,1,"","single measured execution",1
+"Felzenszwalb Graph (k=300, minSize=50)",2048x2048,4194304,4.194,32333,0.130,675.79,149,25000,1,"","single measured execution",1
+"Multi-Level Otsu (classes=3)",3072x3072,9437184,9.437,282,33.465,76.26,3,25000,1,"","single measured execution",1
+"K-Means (k=8)",3072x3072,9437184,9.437,25111,0.376,888.25,8,25000,25000,"","single measured execution",1
+"SLIC Superpixels (k=150, m=15)",3072x3072,9437184,9.437,5585,1.690,490.10,143,25000,1,"","single measured execution",1
+"Felzenszwalb Graph (k=300, minSize=50)",3072x3072,9437184,9.437,52769,0.179,1447.79,322,25000,1,"","single measured execution",1

@@ -1,6 +1,6 @@
 Algorithm,MeanIoU,MeanDice,PixelAccuracyPct,BoundaryPrecision,BoundaryRecall,BoundaryF1
-Otsu Multi-Threshold (k=3),0.3343,0.4414,74.25%,0.0279,0.9866,0.0543
-K-Means (k=6, RGB),0.7689,0.8293,69.82%,0.5009,0.9888,0.6650
-K-Means (k=6, Spatial-XY),0.5860,0.6359,50.05%,0.3583,0.9801,0.5248
-SLIC Superpixels (k=80),0.2936,0.4270,8.37%,0.2258,0.9522,0.3650
-Felzenszwalb Graph,0.9171,0.9519,98.26%,0.8838,1.0000,0.9383
+"Otsu Multi-Threshold (k=3)",0.3343,0.4414,74.25%,0.0279,0.9866,0.0543
+"K-Means (k=6, RGB)",0.7689,0.8293,69.82%,0.5009,0.9888,0.6650
+"K-Means (k=6, Spatial-XY)",0.5860,0.6359,50.05%,0.3583,0.9801,0.5248
+"SLIC Superpixels (k=80)",0.2936,0.4270,8.37%,0.2258,0.9522,0.3650
+"Felzenszwalb Graph",0.9171,0.9519,98.26%,0.8838,1.0000,0.9383

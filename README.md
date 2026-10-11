@@ -20,7 +20,8 @@ An end-to-end, high-performance computational image segmentation suite in Java (
   - **Kaggle / Custom Dataset Loader**: Ingests arbitrary folders of PNG, JPEG, JPG, and BMP images.
 - **Empirical Scalability Benchmarking Engine**:
   - **Large Image Scaling**: Tests progressive resolutions ($256 \times 256$ up to $3072 \times 3072$, ~9.5 Megapixels).
-  - **Increasing Dataset Sizes**: Tests batch throughput ($5, 10, 25, 50$ images) comparing single-threaded sequential vs multi-threaded parallel execution.
+  - **Increasing Dataset Sizes**: Tests batch throughput ($5, 10, 25, 50$ images) comparing sequential execution with the configured worker pool.
+  - **Configurable Thread Scaling**: Compares distinct valid pool sizes up to the machine's available logical processor count using repeated, median-timed runs.
   - **Quantitative Quality Metrics**: Calculates **mIoU (Mean Intersection-over-Union)**, **mDice (F1)**, **Pixel Accuracy**, and **Boundary F1-score**.
   - **Visual Output Generation**: Generates 3-panel comparative images `[Original | Mean-Color Segmented | Boundary Contours]`.
 
@@ -39,7 +40,7 @@ An end-to-end, high-performance computational image segmentation suite in Java (
 
 ## 3. Empirical Performance Investigation Results
 
-The following empirical results were measured on a **12-Core host running OpenJDK 17 64-Bit VM**:
+The following benchmark tables are the project's previously recorded example run on a **12-logical-processor host running OpenJDK 17**. They are historical results, not measurements from the current computer. Run the benchmark to generate current CSV and Markdown results; the dashboard now reads the generated CSV data.
 
 ### Experiment A: Performance Scaling on Large Images (Multi-Megapixel)
 
@@ -111,7 +112,9 @@ ImageSegmentationProject/
 │   │   └── OtsuMultiThreshold.java        # Multi-level Otsu thresholding
 │   ├── benchmark/
 │   │   ├── BenchmarkRunner.java           # Scalability test engine
-│   │   ├── BenchmarkMetric.java           # Record entity
+│   │   ├── BenchmarkMetric.java           # Batch and resolution measurements
+│   │   ├── ThreadScalingMetric.java       # Thread scaling measurement
+│   │   ├── BenchmarkChartViewer.java      # Swing charts from measured CSV data
 │   │   └── BenchmarkReportExporter.java   # CSV & Markdown report generator
 │   ├── dataset/
 │   │   ├── SyntheticDatasetGenerator.java # Procedural image + mask generator
@@ -120,13 +123,15 @@ ImageSegmentationProject/
 │   └── util/
 │       ├── ColorSpaceConverter.java       # sRGB <-> CIELAB conversions
 │       ├── ImageUtils.java                # Overlays, mean-color, composite images
-│       └── DisjointSet.java               # Union-Find with rank and path compression
+│       ├── DisjointSet.java               # Union-Find with rank and path compression
+│       └── ThreadConfig.java              # Configurable managed ForkJoinPool
 ├── bin/                                   # Compiled bytecode
 ├── output/
 │   ├── visuals/                           # Generated 3-panel comparative PNGs
 │   ├── BENCHMARK_REPORT.md                # Comprehensive benchmark report
 │   ├── benchmark_resolution_scaling.csv   # Resolution benchmark raw data
 │   ├── benchmark_dataset_batch_scaling.csv# Batch size benchmark raw data
+│   ├── benchmark_thread_scaling.csv       # Optional thread-count scaling measurements
 │   └── benchmark_accuracy_metrics.csv     # Accuracy evaluation raw data
 ├── build.bat                              # Windows batch compilation script
 ├── build.ps1                              # PowerShell compilation script
@@ -148,6 +153,11 @@ build.bat
 ```
 *(Uses standard `javac -d bin ...` with no external dependencies required!)*
 
+Run the dependency-free regression tests with:
+```text
+test.bat
+```
+
 ### 5.2 Running the Application
 
 #### Option 1: Interactive Menu (Recommended)
@@ -158,15 +168,28 @@ Run with no arguments to access the interactive CLI:
 run.bat
 ```
 Menu options:
-1. **Run Full Performance Benchmark & Scaling Investigation** (Runs large images, dataset scaling, accuracy evaluation, and exports CSV/Markdown/Visuals)
-2. **Generate Synthetic Dataset with Ground-Truth Masks**
-3. **Process Custom / Kaggle Image Dataset Folder**
-4. **Segment a Single Image with Visual Comparison Overlays**
+1. **Run benchmark using the configured worker count**
+2. **Run the full benchmark with a thread-scaling experiment**
+3. **Display the measured-data dashboard**
+4. **Generate a synthetic dataset with ground-truth masks**
+5. **Process a custom image dataset folder**
+6. **Segment a single image**
+7. **Configure the number of worker threads**
+8. **Exit**
 
 #### Option 2: Command-Line Flags
 - **Run the full investigation suite**:
   ```powershell
   .\run.ps1 --benchmark output
+  ```
+- **Run the suite with the additional thread-scaling experiment**:
+  ```powershell
+  .\run.ps1 --thread-scaling output
+  ```
+- **Choose a worker count for a command** (`--threads` goes before the command):
+  ```powershell
+  .\run.ps1 --threads 4 --benchmark output
+  .\run.ps1 --threads 2 --segment-dataset "C:\path\to\images" output/results
   ```
 - **Generate synthetic dataset** (e.g. 50 images at 512x512):
   ```powershell
@@ -195,4 +218,14 @@ Once downloaded and extracted into a folder (e.g. `C:\Datasets\KaggleImages`), s
 ```powershell
 .\run.ps1 --segment-dataset "C:\Datasets\KaggleImages" output/kaggle_segmented
 ```
-The system will automatically detect all `.png`, `.jpg`, `.jpeg`, and `.bmp` files, distribute the workload across all CPU cores in parallel, and generate side-by-side comparative visualizations for every image.
+The system will automatically detect all `.png`, `.jpg`, `.jpeg`, and `.bmp` files, distribute the workload across the configured worker pool, and generate side-by-side comparative visualizations for every image.
+
+## 7. Thread configuration and benchmark interpretation
+
+The interactive menu's **Configure the number of worker threads** option changes the pool used by later operations without restarting the application. A command-line run can set the count with `--threads <positive-count>` before the command. The default is `Runtime.getRuntime().availableProcessors()`. The application displays the available logical-processor count; this value is not a guarantee that the same number of workers will be busy at every moment.
+
+`ThreadConfig.java` owns the reusable application-wide `ForkJoinPool`. Batch image processing submits its parallel stream to this pool rather than using the common pool. Choosing one worker uses a sequential path. K-Means pixel assignment uses the configured pool when more than one worker is selected; SLIC, Otsu, and Felzenszwalb remain sequential for a single image. The ordinary batch benchmark uses the selected count. The optional scaling experiment tests distinct valid counts from 1, 2, 4, 6, 8, and the available logical processor count, excluding any count above the machine's reported availability.
+
+The thread-scaling experiment uses one fixed generated batch and identical SLIC settings at every pool size. It performs a warm-up and reports the median of three measured runs. Dataset generation and file output are outside the timed intervals. `benchmark_thread_scaling.csv` records configured threads, actual pool parallelism, runtimes, speedup, efficiency, throughput, accuracy applicability, and failures. Accuracy is not measured in this performance-only experiment.
+
+Speedup is sequential runtime divided by parallel runtime. Parallel efficiency is speedup divided by configured thread count, expressed as a percentage. More threads do not guarantee proportional improvement: task scheduling, memory bandwidth, workload size, and non-parallel portions can limit scaling. The Swing charts read measured values from generated CSV files and display a clear message when the required measurements are absent or invalid.

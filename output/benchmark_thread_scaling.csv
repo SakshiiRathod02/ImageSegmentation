@@ -1,0 +1,1 @@
+Algorithm,BatchSize,Resolution,ConfiguredThreadCount,ActualPoolParallelism,SequentialMedianMs,ParallelMedianMs,Speedup,ParallelEfficiencyPct,ThroughputMPPerSec,AccuracyMetrics,Failure,TimingMethod,MeasurementRepeats

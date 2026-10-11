@@ -6,13 +6,12 @@ import com.segmentation.dataset.GroundTruthEvaluator.EvaluationReport;
 import com.segmentation.dataset.SyntheticDatasetGenerator;
 import com.segmentation.dataset.SyntheticDatasetGenerator.SyntheticSample;
 import com.segmentation.util.ImageUtils;
+import com.segmentation.util.ThreadConfig;
 
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.ForkJoinPool;
-import java.util.stream.Collectors;
 
 /**
  * Benchmark orchestration engine executing rigorous empirical experiments on:
@@ -35,7 +34,11 @@ public class BenchmarkRunner {
      * Executes the complete benchmark suite, prints console summaries, and exports reports.
      */
     public void runFullSuite() throws IOException {
-        int availableCores = Runtime.getRuntime().availableProcessors();
+        runFullSuite(false);
+    }
+
+    public void runFullSuite(boolean includeThreadScaling) throws IOException {
+        int availableCores = ThreadConfig.getAvailableProcessors();
         System.out.println("================================================================================");
         System.out.println("             IMAGE SEGMENTATION BENCHMARK & INVESTIGATION SUITE                 ");
         System.out.println("================================================================================");
@@ -48,7 +51,11 @@ public class BenchmarkRunner {
 
         // 2. Run Dataset Batch Size Scaling (Increasing Dataset Sizes)
         System.out.println("\n>>> 2. Investigating Throughput on Increasing Dataset Sizes (Sequential vs Parallel)...");
-        List<BenchmarkMetric> batchMetrics = runDatasetBatchBenchmark(availableCores);
+        List<BenchmarkMetric> batchMetrics = runDatasetBatchBenchmark(ThreadConfig.getThreadCount());
+
+        List<ThreadScalingMetric> threadMetrics = includeThreadScaling
+                ? runThreadScalingBenchmark()
+                : Collections.emptyList();
 
         // 3. Run Segmentation Quality Evaluation
         System.out.println("\n>>> 3. Evaluating Segmentation Accuracy against Ground Truth...");
@@ -63,18 +70,24 @@ public class BenchmarkRunner {
         File csvRes = new File(outputDir, "benchmark_resolution_scaling.csv");
         File csvBatch = new File(outputDir, "benchmark_dataset_batch_scaling.csv");
         File csvAcc = new File(outputDir, "benchmark_accuracy_metrics.csv");
+        File csvThreads = new File(outputDir, "benchmark_thread_scaling.csv");
         File mdReport = new File(outputDir, "BENCHMARK_REPORT.md");
 
         BenchmarkReportExporter.exportResolutionScalingCsv(resMetrics, csvRes);
         BenchmarkReportExporter.exportDatasetScalingCsv(batchMetrics, csvBatch);
         BenchmarkReportExporter.exportAccuracyCsv(accuracyReports, csvAcc);
-        BenchmarkReportExporter.exportFullMarkdownReport(resMetrics, batchMetrics, accuracyReports, availableCores, mdReport);
+        BenchmarkReportExporter.exportThreadScalingCsv(threadMetrics, csvThreads);
+        BenchmarkReportExporter.exportFullMarkdownReport(resMetrics, batchMetrics, accuracyReports,
+                threadMetrics, availableCores, ThreadConfig.getThreadCount(), mdReport);
 
         System.out.println("--------------------------------------------------------------------------------");
         System.out.println("Benchmark successfully finished!");
         System.out.println("Resolution CSV: " + csvRes.getAbsolutePath());
         System.out.println("Dataset CSV:    " + csvBatch.getAbsolutePath());
         System.out.println("Accuracy CSV:   " + csvAcc.getAbsolutePath());
+        if (includeThreadScaling) {
+            System.out.println("Thread Scaling: " + csvThreads.getAbsolutePath());
+        }
         System.out.println("Markdown Report:" + mdReport.getAbsolutePath());
         System.out.println("Visual Outputs: " + new File(outputDir, "visuals").getAbsolutePath());
         System.out.println("================================================================================");
@@ -141,7 +154,10 @@ public class BenchmarkRunner {
                         result.getExecutionTimeMs(),
                         memUsed / (1024.0 * 1024.0),
                         result.getNumSegments(),
-                        1.0, 1.0
+                        1.0, 1.0,
+                        ThreadConfig.getThreadCount(),
+                        algo instanceof KMeansSegmentation ? ThreadConfig.getPoolParallelism() : 1,
+                        ""
                 );
                 metrics.add(m);
 
@@ -162,17 +178,21 @@ public class BenchmarkRunner {
      * Investigation 2: Dataset Batch Size Scaling.
      * Evaluates sequential vs parallel throughput on increasing numbers of images.
      */
-    public List<BenchmarkMetric> runDatasetBatchBenchmark(int availableCores) {
+    public List<BenchmarkMetric> runDatasetBatchBenchmark(int configuredThreadCount) {
         int[] batchSizes = {5, 10, 25, 50};
         int imgW = 512;
         int imgH = 512;
 
         List<BenchmarkMetric> metrics = new ArrayList<>();
+        final int repetitions = 3;
+        ThreadConfig.setThreadCount(configuredThreadCount);
         // Representative algorithm: SLIC Superpixels
         SegmentationAlgorithm algo = new SLICSuperpixelSegmentation(120, 15.0, 6);
 
         System.out.printf("    Testing Algorithm: %s on %dx%d images%n", algo.getName(), imgW, imgH);
-        System.out.printf("    %-12s | %-15s | %-12s | %-14s | %-10s | %-10s%n",
+        System.out.printf("    Configured workers: %d | Actual ForkJoinPool parallelism: %d%n",
+                configuredThreadCount, ThreadConfig.getPoolParallelism());
+        System.out.printf("    %-12s | %-24s | %-12s | %-14s | %-10s | %-10s%n",
                 "Batch Size", "Mode", "Total Time", "Avg Time/Img", "Speedup", "Efficiency");
         System.out.println("    -----------------------------------------------------------------------------");
 
@@ -184,12 +204,19 @@ public class BenchmarkRunner {
                 batch.add(sample.image);
             }
 
-            // 1. Sequential Mode (Single-Threaded)
-            long tSeqStart = System.currentTimeMillis();
-            for (BufferedImage img : batch) {
-                algo.segment(img);
+            // Warm both execution paths, then compare medians over the same in-memory images.
+            algo.segment(batch.get(0));
+            timeBatch(batch, algo, configuredThreadCount > 1);
+            long[] sequentialTimes = new long[repetitions];
+            long[] parallelTimes = new long[repetitions];
+            for (int r = 0; r < repetitions; r++) {
+                sequentialTimes[r] = timeBatch(batch, algo, false);
+                parallelTimes[r] = timeBatch(batch, algo, configuredThreadCount > 1);
             }
-            long tSeqTotal = Math.max(1, System.currentTimeMillis() - tSeqStart);
+            double sequentialMedianMs = medianMillis(sequentialTimes);
+            double parallelMedianMs = medianMillis(parallelTimes);
+            long tSeqTotal = Math.max(1, Math.round(sequentialMedianMs));
+            long tParTotal = Math.max(1, Math.round(parallelMedianMs));
 
             BenchmarkMetric mSeq = new BenchmarkMetric(
                     BenchmarkMetric.ExperimentType.DATASET_BATCH_SCALING,
@@ -197,35 +224,141 @@ public class BenchmarkRunner {
                     imgW, imgH, count,
                     "Sequential (1T)",
                     tSeqTotal,
-                    0.0, 120, 1.0, 1.0
+                    0.0, 120, 1.0, 1.0, 1, 1, "",
+                    "median after warm-up", repetitions
             );
             metrics.add(mSeq);
 
-            // 2. Parallel Mode (Multi-Threaded via ForkJoinPool)
-            long tParStart = System.currentTimeMillis();
-            batch.parallelStream().forEach(algo::segment);
-            long tParTotal = Math.max(1, System.currentTimeMillis() - tParStart);
-
-            double speedup = (double) tSeqTotal / tParTotal;
-            double efficiency = speedup / availableCores;
+            double speedup = sequentialMedianMs / parallelMedianMs;
+            double efficiency = speedup / configuredThreadCount;
+            String configuredMode = configuredThreadCount == 1
+                    ? "Configured sequential (1T)"
+                    : "Parallel (" + configuredThreadCount + "T)";
 
             BenchmarkMetric mPar = new BenchmarkMetric(
                     BenchmarkMetric.ExperimentType.DATASET_BATCH_SCALING,
                     algo.getName(),
                     imgW, imgH, count,
-                    "Parallel (" + availableCores + "T)",
+                    configuredMode,
                     tParTotal,
-                    0.0, 120, speedup, efficiency
+                    0.0, 120, speedup, efficiency,
+                    configuredThreadCount, ThreadConfig.getPoolParallelism(), "",
+                    "median after warm-up", repetitions
             );
             metrics.add(mPar);
 
-            System.out.printf("    %-12d | %-15s | %8d ms | %10.1f ms | %-10s | %-10s%n",
+            System.out.printf("    %-12d | %-24s | %8d ms | %10.1f ms | %-10s | %-10s%n",
                     count, "Sequential (1T)", tSeqTotal, mSeq.avgTimePerImageMs, "1.00x", "100.0%");
-            System.out.printf("    %-12d | %-15s | %8d ms | %10.1f ms | %9.2fx | %8.1f%%%n",
-                    count, "Parallel (" + availableCores + "T)", tParTotal, mPar.avgTimePerImageMs, speedup, efficiency * 100.0);
+            System.out.printf("    %-12d | %-24s | %8d ms | %10.1f ms | %9.2fx | %8.1f%%%n",
+                    count, configuredMode, tParTotal,
+                    mPar.avgTimePerImageMs, speedup, efficiency * 100.0);
             System.out.println("    -----------------------------------------------------------------------------");
         }
         return metrics;
+    }
+
+    public List<ThreadScalingMetric> runThreadScalingBenchmark() {
+        return runThreadScalingBenchmark(25, 512, 512, 3);
+    }
+
+    public List<ThreadScalingMetric> runThreadScalingBenchmark(
+            int batchSize, int width, int height, int repetitions) {
+        if (batchSize < 1 || width < 1 || height < 1 || repetitions < 1) {
+            throw new IllegalArgumentException("Batch size, image dimensions, and repetitions must be positive.");
+        }
+        SegmentationAlgorithm algorithm = new SLICSuperpixelSegmentation(120, 15.0, 6);
+        List<BufferedImage> images = new ArrayList<>(batchSize);
+        for (int i = 0; i < batchSize; i++) {
+            images.add(SyntheticDatasetGenerator.generateSample(
+                    width, height, 4, 5.0, 7000L + i, "thread_scale_" + i).image);
+        }
+
+        System.out.printf("%n>>> Thread scaling: %d fixed images at %dx%d, %d measured repetitions (median)%n",
+                batchSize, width, height, repetitions);
+        List<Integer> threadCounts = getThreadScalingCounts(ThreadConfig.getAvailableProcessors());
+        int originalThreadCount = ThreadConfig.getThreadCount();
+        List<ThreadScalingMetric> metrics = new ArrayList<>();
+        try {
+            long[] sequentialTimes = new long[repetitions];
+            algorithm.segment(images.get(0));
+            for (int r = 0; r < repetitions; r++) {
+                sequentialTimes[r] = timeBatch(images, algorithm, false);
+            }
+            double sequentialMedianMs = medianMillis(sequentialTimes);
+            System.out.printf("  Sequential baseline median: %.2f ms%n", sequentialMedianMs);
+
+            for (int threadCount : threadCounts) {
+                String failure = "";
+                long[] parallelTimes = new long[repetitions];
+                int poolParallelism = threadCount;
+                try {
+                    ThreadConfig.setThreadCount(threadCount);
+                    poolParallelism = ThreadConfig.getPoolParallelism();
+                    algorithm.segment(images.get(0));
+                    for (int r = 0; r < repetitions; r++) {
+                        parallelTimes[r] = timeBatch(images, algorithm, threadCount > 1);
+                    }
+                } catch (RuntimeException e) {
+                    failure = e.getClass().getSimpleName() + ": " + e.getMessage();
+                    System.err.printf("  Thread count %d failed: %s%n", threadCount, failure);
+                }
+
+                double parallelMedianMs = failure.isEmpty() ? medianMillis(parallelTimes) : Double.NaN;
+                double speedup = failure.isEmpty() && parallelMedianMs > 0
+                        ? sequentialMedianMs / parallelMedianMs : Double.NaN;
+                double efficiency = failure.isEmpty() && threadCount > 0
+                        ? speedup / threadCount * 100.0 : Double.NaN;
+                double megapixels = (double) width * height * batchSize / 1_000_000.0;
+                double throughput = failure.isEmpty() && parallelMedianMs > 0
+                        ? megapixels / (parallelMedianMs / 1000.0) : Double.NaN;
+                ThreadScalingMetric metric = new ThreadScalingMetric(
+                        algorithm.getName(), batchSize, width, height, threadCount,
+                        poolParallelism, sequentialMedianMs, parallelMedianMs, speedup,
+                        efficiency, throughput, "N/A (performance-only experiment)", failure,
+                        repetitions);
+                metrics.add(metric);
+                if (failure.isEmpty()) {
+                    System.out.printf("  %2d thread(s), pool=%2d | median %.2f ms | %.2fx | %.1f%% | %.2f MP/s%n",
+                            threadCount, poolParallelism, parallelMedianMs, speedup, efficiency, throughput);
+                }
+            }
+        } finally {
+            ThreadConfig.setThreadCount(originalThreadCount);
+        }
+        return metrics;
+    }
+
+    private static List<Integer> getThreadScalingCounts(int availableProcessors) {
+        TreeSet<Integer> counts = new TreeSet<>();
+        for (int candidate : new int[]{1, 2, 4, 6, 8, availableProcessors}) {
+            if (candidate > 0 && candidate <= availableProcessors) {
+                counts.add(candidate);
+            }
+        }
+        return new ArrayList<>(counts);
+    }
+
+    private static long timeBatch(List<BufferedImage> images, SegmentationAlgorithm algorithm,
+                                  boolean parallel) {
+        long start = System.nanoTime();
+        if (parallel) {
+            ThreadConfig.runInPool(() -> {
+                images.parallelStream().forEach(algorithm::segment);
+                return null;
+            });
+        } else {
+            images.forEach(algorithm::segment);
+        }
+        return System.nanoTime() - start;
+    }
+
+    private static double medianMillis(long[] measurementsNanos) {
+        long[] sorted = measurementsNanos.clone();
+        Arrays.sort(sorted);
+        double medianNanos = (sorted.length % 2 == 1)
+                ? sorted[sorted.length / 2]
+                : (sorted[sorted.length / 2 - 1] / 2.0 + sorted[sorted.length / 2] / 2.0);
+        return Math.max(0.001, medianNanos / 1_000_000.0);
     }
 
     /**

@@ -9,5 +9,8 @@ if (-not (Test-Path $binDir)) {
 
 $sourceFiles = (Get-ChildItem -Path (Join-Path $PSScriptRoot "src/main/java") -Filter *.java -Recurse).FullName
 javac -d $binDir $sourceFiles
+if ($LASTEXITCODE -ne 0) {
+    throw "Java compilation failed with exit code $LASTEXITCODE."
+}
 
 Write-Host "[SUCCESS] Compilation completed successfully into bin/" -ForegroundColor Green

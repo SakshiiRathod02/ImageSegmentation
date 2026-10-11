@@ -7,6 +7,7 @@ import com.segmentation.dataset.ImageDatasetLoader;
 import com.segmentation.dataset.ImageDatasetLoader.ImageEntry;
 import com.segmentation.dataset.SyntheticDatasetGenerator;
 import com.segmentation.util.ImageUtils;
+import com.segmentation.util.ThreadConfig;
 
 import java.awt.image.BufferedImage;
 import java.io.File;
@@ -14,6 +15,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Scanner;
+import java.util.stream.IntStream;
 
 /**
  * Main entry point for the Computational Image Segmentation project.
@@ -29,16 +31,31 @@ public class Main {
     private static final String DEFAULT_OUTPUT_DIR = "output";
 
     public static void main(String[] args) {
+        int exitCode = 0;
         try {
             if (args.length > 0) {
-                handleCommandLineArgs(args);
+                String[] effectiveArgs = args;
+                if ("--threads".equalsIgnoreCase(args[0])) {
+                    if (args.length < 3) {
+                        printUsage();
+                        return;
+                    }
+                    ThreadConfig.setThreadCount(Integer.parseInt(args[1]));
+                    effectiveArgs = Arrays.copyOfRange(args, 2, args.length);
+                }
+                handleCommandLineArgs(effectiveArgs);
             } else {
                 runInteractiveConsole();
             }
         } catch (Exception e) {
             System.err.println("Fatal Error: " + e.getMessage());
             e.printStackTrace();
-            System.exit(1);
+            exitCode = 1;
+        } finally {
+            ThreadConfig.shutdown();
+        }
+        if (exitCode != 0) {
+            System.exit(exitCode);
         }
     }
 
@@ -52,7 +69,15 @@ public class Main {
                 if (args.length > 1) {
                     outDir = new File(args[1]);
                 }
-                new BenchmarkRunner(outDir).runFullSuite();
+                new BenchmarkRunner(outDir).runFullSuite(false);
+                BenchmarkChartViewer.showDashboard(outDir);
+                break;
+
+            case "--thread-scaling":
+                if (args.length > 1) {
+                    outDir = new File(args[1]);
+                }
+                new BenchmarkRunner(outDir).runFullSuite(true);
                 BenchmarkChartViewer.showDashboard(outDir);
                 break;
 
@@ -105,58 +130,76 @@ public class Main {
     }
 
     private static void runInteractiveConsole() throws IOException {
-        System.out.println("================================================================================");
-        System.out.println("                COMPUTATIONAL IMAGE SEGMENTATION PLATFORM                       ");
-        System.out.println("================================================================================");
-        System.out.println("  1. Run Full Performance Benchmark & Display Analytics Graphs (Recommended)");
-        System.out.println("  2. Display Performance Graphs & GUI Analytics Dashboard");
-        System.out.println("  3. Generate Synthetic Dataset with Ground-Truth Masks");
-        System.out.println("  4. Process Custom / Kaggle Image Dataset Folder");
-        System.out.println("  5. Segment a Single Image with Visual Comparison Overlays");
-        System.out.println("  6. Exit");
-        System.out.println("================================================================================");
-        System.out.print("Please enter option [1-6] (default 1): ");
+        try (Scanner scanner = new Scanner(System.in)) {
+            File outDir = new File(DEFAULT_OUTPUT_DIR);
+            while (true) {
+                System.out.println("================================================================================");
+                System.out.println("                COMPUTATIONAL IMAGE SEGMENTATION PLATFORM                       ");
+                System.out.printf(" Available logical processors: %d | Configured worker threads: %d%n",
+                        ThreadConfig.getAvailableProcessors(), ThreadConfig.getThreadCount());
+                System.out.println("================================================================================");
+                System.out.println("  1. Run benchmark using the configured thread count");
+                System.out.println("  2. Run full benchmark with thread-scaling experiment");
+                System.out.println("  3. Display benchmark dashboard");
+                System.out.println("  4. Generate synthetic dataset with ground-truth masks");
+                System.out.println("  5. Process custom image dataset folder");
+                System.out.println("  6. Segment a single image");
+                System.out.println("  7. Configure number of worker threads");
+                System.out.println("  8. Exit");
+                System.out.println("================================================================================");
+                System.out.print("Please enter option [1-8]: ");
 
-        Scanner scanner = new Scanner(System.in);
-        String input = scanner.hasNextLine() ? scanner.nextLine().trim() : "1";
-        if (input.isEmpty()) input = "1";
+                String input = scanner.hasNextLine() ? scanner.nextLine().trim() : "8";
+                switch (input) {
+                    case "1":
+                        new BenchmarkRunner(outDir).runFullSuite(false);
+                        BenchmarkChartViewer.showDashboard(outDir);
+                        break;
+                    case "2":
+                        new BenchmarkRunner(outDir).runFullSuite(true);
+                        BenchmarkChartViewer.showDashboard(outDir);
+                        break;
+                    case "3":
+                        BenchmarkChartViewer.showDashboard(outDir);
+                        break;
+                    case "4":
+                        File synDir = new File(outDir, "synthetic_dataset");
+                        System.out.println("Generating 25 synthetic benchmark images (512x512)...");
+                        SyntheticDatasetGenerator.generateDatasetBatch(synDir, 25, 512, 512, 6.0);
+                        System.out.println("Done! Saved to: " + synDir.getAbsolutePath());
+                        break;
+                    case "5":
+                        System.out.print("Enter path to image folder: ");
+                        processCustomDataset(new File(scanner.nextLine().trim()), new File(outDir, "batch_results"));
+                        break;
+                    case "6":
+                        System.out.print("Enter path to image file: ");
+                        segmentSingleImage(new File(scanner.nextLine().trim()), new File(outDir, "single_image_results"));
+                        break;
+                    case "7":
+                        configureThreadCount(scanner);
+                        break;
+                    case "8":
+                        System.out.println("Exiting.");
+                        return;
+                    default:
+                        System.out.println("Unknown option. Please select 1-8.");
+                }
+            }
+        }
+    }
 
-        File outDir = new File(DEFAULT_OUTPUT_DIR);
-
-        switch (input) {
-            case "1":
-                new BenchmarkRunner(outDir).runFullSuite();
-                BenchmarkChartViewer.showDashboard(outDir);
-                break;
-            case "2":
-                BenchmarkChartViewer.showDashboard(outDir);
-                break;
-            case "3":
-                File synDir = new File(outDir, "synthetic_dataset");
-                System.out.println("Generating 25 synthetic benchmark images (512x512)...");
-                SyntheticDatasetGenerator.generateDatasetBatch(synDir, 25, 512, 512, 6.0);
-                System.out.println("Done! Saved to: " + synDir.getAbsolutePath());
-                break;
-            case "4":
-                System.out.print("Enter path to image folder: ");
-                String path = scanner.nextLine().trim();
-                File inFolder = new File(path);
-                processCustomDataset(inFolder, new File(outDir, "batch_results"));
-                break;
-            case "5":
-                System.out.print("Enter path to image file: ");
-                String fileStr = scanner.nextLine().trim();
-                File inFile = new File(fileStr);
-                segmentSingleImage(inFile, new File(outDir, "single_image_results"));
-                break;
-            case "6":
-                System.out.println("Exiting.");
-                break;
-            default:
-                System.out.println("Unknown option. Running full benchmark suite by default.");
-                new BenchmarkRunner(outDir).runFullSuite();
-                BenchmarkChartViewer.showDashboard(outDir);
-                break;
+    private static void configureThreadCount(Scanner scanner) {
+        System.out.printf("Available logical processors: %d%nCurrent configured thread count: %d%n",
+                ThreadConfig.getAvailableProcessors(), ThreadConfig.getThreadCount());
+        System.out.print("Enter the number of worker threads to use: ");
+        String value = scanner.nextLine().trim();
+        try {
+            ThreadConfig.setThreadCount(Integer.parseInt(value));
+            System.out.printf("Thread configuration updated successfully. Configured worker threads: %d%n",
+                    ThreadConfig.getThreadCount());
+        } catch (IllegalArgumentException e) {
+            System.err.println("Invalid thread count. Enter a positive integer no greater than 32767.");
         }
     }
 
@@ -167,14 +210,19 @@ public class Main {
             return;
         }
 
-        System.out.printf("Discovered %d images in %s. Processing with multi-threaded SLIC Superpixels...%n",
-                entries.size(), inputDir.getAbsolutePath());
+        System.out.printf("Discovered %d images in %s. Processing with SLIC Superpixels using %d configured worker(s)...%n",
+                entries.size(), inputDir.getAbsolutePath(), ThreadConfig.getThreadCount());
 
-        outputDir.mkdirs();
+        if (!outputDir.exists() && !outputDir.mkdirs()) {
+            throw new IOException("Could not create output directory: " + outputDir.getAbsolutePath());
+        }
         SegmentationAlgorithm algo = new SLICSuperpixelSegmentation(150, 15.0, 6);
 
         long start = System.currentTimeMillis();
-        entries.parallelStream().forEach(entry -> {
+        List<String> statuses = ThreadConfig.parallelMap(
+                IntStream.range(0, entries.size()).boxed().collect(java.util.stream.Collectors.toList()),
+                index -> {
+            ImageEntry entry = entries.get(index);
             try {
                 BufferedImage img = entry.load();
                 SegmentationResult res = algo.segment(img);
@@ -186,18 +234,28 @@ public class Main {
                 );
 
                 String baseName = entry.name.replaceAll("\\.[^.]+$", "");
-                File dest = new File(outputDir, baseName + "_segmented.png");
+                File dest = new File(outputDir, String.format("%04d_%s_segmented.png", index + 1, baseName));
                 ImageUtils.saveImage(sideBySide, dest, "PNG");
-                System.out.printf("  Processed: %s (%dx%d) in %d ms -> %s%n",
+                return String.format("  Processed: %s (%dx%d) in %d ms -> %s",
                         entry.name, img.getWidth(), img.getHeight(), res.getExecutionTimeMs(), dest.getName());
             } catch (Exception e) {
-                System.err.printf("  Failed to process %s: %s%n", entry.name, e.getMessage());
+                return String.format("  Failed to process %s: %s", entry.name, e.getMessage());
             }
         });
 
+        int failures = 0;
+        for (String status : statuses) {
+            if (status.startsWith("  Failed")) {
+                failures++;
+                System.err.println(status);
+            } else {
+                System.out.println(status);
+            }
+        }
         long totalTime = System.currentTimeMillis() - start;
-        System.out.printf("Batch processing complete! Total time: %d ms (Avg: %.1f ms/image). Output at: %s%n",
-                totalTime, (double) totalTime / entries.size(), outputDir.getAbsolutePath());
+        System.out.printf("Batch processing complete! %d succeeded, %d failed. Total time: %d ms (Avg: %.1f ms/image). Output at: %s%n",
+                entries.size() - failures, failures, totalTime,
+                (double) totalTime / entries.size(), outputDir.getAbsolutePath());
     }
 
     private static void segmentSingleImage(File imgFile, File outputDir) throws IOException {
@@ -244,7 +302,9 @@ public class Main {
         System.out.println("Usage:");
         System.out.println("  java -cp bin com.segmentation.Main [options]");
         System.out.println("Options:");
-        System.out.println("  --benchmark [outDir]                       Run full performance and scaling investigation");
+        System.out.println("  --threads <count> <command> [args]          Configure worker threads for this run");
+        System.out.println("  --benchmark [outDir]                       Run benchmark using the configured thread count");
+        System.out.println("  --thread-scaling [outDir]                  Run full suite with thread-scaling experiment");
         System.out.println("  --generate-dataset <count> <w> <h> [dir]   Generate synthetic images with masks");
         System.out.println("  --segment-dataset <inDir> [outDir]         Batch segment images in a folder");
         System.out.println("  --segment-image <imageFile> [outDir]       Segment single image with all algorithms");

@@ -2,10 +2,11 @@ package com.segmentation.algorithm;
 
 import com.segmentation.util.ColorSpaceConverter;
 import com.segmentation.util.ImageUtils;
+import com.segmentation.util.ThreadConfig;
 
 import java.awt.image.BufferedImage;
 import java.util.Random;
-import java.util.concurrent.ForkJoinPool;
+import java.util.function.IntConsumer;
 import java.util.stream.IntStream;
 
 /**
@@ -86,15 +87,14 @@ public class KMeansSegmentation implements SegmentationAlgorithm {
         double[][] centroids = initializeCentroidsKMeansPlusPlus(features, numPixels, dims, k, randomSeed);
 
         int[] labels = new int[numPixels];
-        double[] minDistances = new double[numPixels];
         int iterationsDone = 0;
 
         // Lloyd's iteration loop
         for (int iter = 0; iter < maxIterations; iter++) {
             iterationsDone++;
 
-            // Parallel Assignment Step
-            IntStream.range(0, numPixels).parallel().forEach(i -> {
+            // Each task writes only its own pixel's label, so assignments are race-free.
+            IntConsumer assignPixel = i -> {
                 double bestDist = Double.MAX_VALUE;
                 int bestCluster = 0;
                 for (int c = 0; c < k; c++) {
@@ -109,8 +109,15 @@ public class KMeansSegmentation implements SegmentationAlgorithm {
                     }
                 }
                 labels[i] = bestCluster;
-                minDistances[i] = bestDist;
-            });
+            };
+            if (ThreadConfig.getThreadCount() == 1) {
+                IntStream.range(0, numPixels).forEach(assignPixel);
+            } else {
+                ThreadConfig.runInPool(() -> {
+                    IntStream.range(0, numPixels).parallel().forEach(assignPixel);
+                    return null;
+                });
+            }
 
             // Update Centroids Step
             double[][] sumFeatures = new double[k][dims];
